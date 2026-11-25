@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { createRoot } from 'react-dom/client';
 import {
   ArrowDown, ArrowUpRight, Github, Linkedin, Mail, Menu, X, Code2,
@@ -58,18 +59,41 @@ const opportunities = [
 function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [form, setForm] = useState({ name: '', email: '', type: 'Full-time role', details: '' });
 
   const closeMenu = () => setMenuOpen(false);
   const update = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
-    const subject = encodeURIComponent(`Portfolio enquiry — ${form.type}`);
-    const body = encodeURIComponent(
-      `Name: ${form.name}\nEmail: ${form.email}\nOpportunity: ${form.type}\n\nDetails:\n${form.details}`
-    );
-    window.location.href = `mailto:${PROFILE.email}?subject=${subject}&body=${body}`;
-    setSent(true);
+    setSending(true);
+    setSent(false);
+    setSubmitError('');
+    try {
+      const response = await fetch('https://formspree.io/f/mgakrbpz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          _replyto: form.email,
+          _subject: `Portfolio enquiry — ${form.type}`,
+          opportunity: form.type,
+          message: form.details,
+        }),
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}));
+        throw new Error(result?.errors?.map((item) => item.message).join(' ') || 'Your enquiry could not be submitted. Please try again.');
+      }
+      setSent(true);
+      setForm({ name: '', email: '', type: 'Full-time role', details: '' });
+    } catch (error) {
+      setSubmitError(error.message || 'Something went wrong. Please try again or email me directly.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -205,9 +229,10 @@ function App() {
               <label>Email address<input type="email" name="email" value={form.email} onChange={update} placeholder="you@company.com" required/></label>
               <label>What are you reaching out about?<select name="type" value={form.type} onChange={update}><option>Full-time role</option><option>Part-time role</option><option>Contract opportunity</option><option>Freelance project</option><option>Other</option></select></label>
               <label>Tell me a little about it<textarea name="details" value={form.details} onChange={update} placeholder="Role, project, timeline or anything useful..." rows="4" required/></label>
-              <button className="button button-primary submit-button" type="submit">Send enquiry <Send size={16}/></button>
-              {sent && <p className="form-note">Your email app should open with the enquiry pre-filled. If it doesn't, email me directly.</p>}
-              <p className="privacy-note">This form opens your email app; it does not store or transmit your information to a server.</p>
+              <button className="button button-primary submit-button" type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send enquiry'} <Send size={16}/></button>
+              {sent && <p className="form-note" role="status">Thanks — your enquiry has been submitted successfully. I’ll get back to you soon.</p>}
+              {submitError && <p className="error-note" role="alert">{submitError}</p>}
+              <p className="privacy-note">Your enquiry is submitted securely through Formspree. Your email address will be used to reply to you.</p>
             </form>
           </div>
         </section>
@@ -218,4 +243,4 @@ function App() {
   );
 }
 
-createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);
+createRoot(document.getElementById('root')).render(<React.StrictMode><App /><Analytics /></React.StrictMode>);
